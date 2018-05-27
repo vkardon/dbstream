@@ -1,0 +1,256 @@
+#!/bin/bash
+
+DBNAME=StreamDB
+USER=Loader
+PASS=Loader
+
+#
+# Ask for MySQL installation directory
+#
+echo "Where is MySQL installed? Press Enter to use MySQL on your path:"
+read answer
+
+if [ -z $answer ]; then
+   MYSQLD_INSTALL_SCRIPT=mysql_install_db
+   MYSQLD_RUN_BIN=mysqld_safe
+   MYSQLD_ADMIN=mysqladmin
+   MYSQLD_MYSQL=mysql
+else
+   MYSQLD_HOME=$answer
+   MYSQLD_INSTALL_SCRIPT=$MYSQLD_HOME/scripts/mysql_install_db
+   MYSQLD_RUN_BIN=$MYSQLD_HOME/bin/mysqld_safe
+   MYSQLD_ADMIN=$MYSQLD_HOME/bin/mysqladmin
+   MYSQLD_MYSQL=$MYSQLD_HOME/bin/mysql
+fi
+
+#echo "MYSQLD_HOME='$MYSQLD_HOME'"
+#echo "MYSQLD_INSTALL_SCRIPT='$MYSQLD_INSTALL_SCRIPT'"
+#echo "MYSQLD_RUN_BIN='$MYSQLD_RUN_BIN'"
+#echo "MYSQLD_ADMIN='$MYSQLD_ADMIN'"
+#echo "MYSQLD_MYSQL='$MYSQLD_MYSQL'"
+
+#
+# Validate MySQL installation
+#
+if [ -z $MYSQLD_INSTALL_SCRIPT ] || [ ! -x $MYSQLD_INSTALL_SCRIPT ]; then
+   echo "Invalid MySQL installation directory:"
+   echo "   '$MYSQLD_INSTALL_SCRIPT' doesn't exist or is not executable"
+   exit
+fi
+
+if [ -z $MYSQLD_RUN_BIN ] || [ ! -x $MYSQLD_RUN_BIN ]; then
+   echo "Invalid MySQL installation directory:"
+   echo "   '$MYSQLD_RUN_BIN' doesn't exist or is not executable"
+   exit
+fi
+
+if [ -z $MYSQLD_ADMIN ] || [ ! -x $MYSQLD_ADMIN ]; then
+   echo "Invalid MySQL installation directory:"
+   echo "   '$MYSQLD_ADMIN' doesn't exist or is not executable"
+   exit
+fi
+
+if [ -z $MYSQLD_MYSQL ] || [ ! -x $MYSQLD_MYSQL ]; then
+   echo "Invalid MySQL installation directory:"
+   echo "   '$MYSQLD_MYSQL' doesn't exist or is not executable"
+   exit
+fi
+
+#
+# Ask for MySQL port number to run
+#
+echo "Specify port number for MySQL to run on:"
+read answer
+
+MYSQL_PORT=$answer
+
+if [ -z $answer ]; then
+   echo "Invalid (empty) port number"
+   exit
+fi
+
+#
+# Get the host name 
+#
+OS=`uname -s`
+
+if [ $OS == "Linux" ]; then
+   # Linux
+   MYSQL_HOST=`hostname -s`
+elif [ $OS == "SunOS" ]; then
+   # Solaris
+   MYSQL_HOST=`hostname`
+elif [ $OS == "Darwin" ]; then
+   # Mac OS X
+   MYSQL_HOST=`hostname -s`
+else
+   # Unknown platform
+   MYSQL_HOST=`hostname`
+fi
+
+#
+# Compose directory for MySQL db, config files, scripts, etc.  
+#
+MYSQL_HOME=${HOME}/mysql_${MYSQL_HOST}_${MYSQL_PORT}
+
+#echo "MYSQL_PORT=$MYSQL_PORT"
+#echo "MYSQL_HOST=$MYSQL_HOST"
+#echo "MYSQL_HOME=$MYSQL_HOME"
+
+mkdir -p $MYSQL_HOME
+mkdir -p $MYSQL_HOME/db
+mkdir -p $MYSQL_HOME/bin
+
+#
+# Generate my.cnf
+#
+echo "Generating $MYSQL_HOME/my.cnf..."
+
+cat <<EOF > $MYSQL_HOME/my.cnf
+[mysqld]
+datadir=$MYSQL_HOME/db
+socket=$MYSQL_HOME/mysql.sock
+#user=mysql
+port=$MYSQL_PORT
+# Disabling symbolic-links is recommended to prevent assorted security risks
+symbolic-links=0
+
+[mysqld_safe]
+log-error=$MYSQL_HOME/mysqld.log
+pid-file=$MYSQL_HOME/mysqld.pid
+
+# The following options will be passed to all MySQL clients
+[client]
+#password=your_password
+port=$MYSQL_PORT
+socket=$MYSQL_HOME/mysql.sock
+
+EOF
+
+#
+# Generate dbstart
+#
+echo "Generating $MYSQL_HOME/bin/dbstart..."
+
+if [ ! -z $MYSQLD_HOME ]; then
+
+cat <<EOF > $MYSQL_HOME/bin/dbstart
+#!/bin/bash
+
+export MY_BASEDIR_VERSION=$MYSQLD_HOME
+$MYSQLD_INSTALL_SCRIPT --datadir=$MYSQL_HOME/db --basedir=$MYSQLD_HOME 
+$MYSQLD_RUN_BIN --defaults-file=$MYSQL_HOME/my.cnf &
+
+EOF
+
+else
+
+cat <<EOF > $MYSQL_HOME/bin/dbstart
+#!/bin/bash
+
+$MYSQLD_INSTALL_SCRIPT --datadir=$MYSQL_HOME/db
+$MYSQLD_RUN_BIN --defaults-file=$MYSQL_HOME/my.cnf &
+
+EOF
+
+fi
+
+chmod +x $MYSQL_HOME/bin/dbstart
+
+#
+# Generate dbstop
+#
+echo "Generating $MYSQL_HOME/bin/dbstop..."
+
+cat <<EOF > $MYSQL_HOME/bin/dbstop
+#!/bin/bash
+
+#$MYSQLD_ADMIN -h $MYSQL_HOST -P $MYSQL_PORT -u root shutdown
+$MYSQLD_ADMIN -h 127.0.0.1 -P $MYSQL_PORT -u root shutdown
+
+EOF
+
+chmod +x $MYSQL_HOME/bin/dbstop
+
+#
+# Generate dbmysql
+#
+echo "Generating $MYSQL_HOME/bin/dbmysql..."
+
+cat <<EOF > $MYSQL_HOME/bin/dbmysql
+#!/bin/bash
+
+DBNAME=$DBNAME
+USER=$USER
+PASS=$PASS
+
+$MYSQLD_MYSQL -h 127.0.0.1 -P $MYSQL_PORT -u \$USER -p\$PASS --database=\$DBNAME
+
+EOF
+
+chmod +x $MYSQL_HOME/bin/dbmysql
+
+#
+# Generate dbcreate
+#
+echo "Generating $MYSQL_HOME/bin/dbcreate..."
+
+cat <<EOF > $MYSQL_HOME/bin/dbcreate
+#!/bin/bash
+
+DBNAME=$DBNAME
+USER=$USER
+PASS=$PASS
+
+# Create database
+Q1="CREATE DATABASE IF NOT EXISTS \$DBNAME;"
+
+# Create user with access from any hosts 
+Q2="GRANT USAGE ON *.* TO '\$USER' IDENTIFIED BY '\$PASS';"
+Q3="GRANT ALL PRIVILEGES ON \$DBNAME.* TO '\$USER';"
+
+# Create user with access from 'localhost'
+Q4="GRANT USAGE ON *.* TO '\$USER'@'localhost' IDENTIFIED BY '\$PASS';"
+Q5="GRANT ALL PRIVILEGES ON \$DBNAME.* TO '\$USER'@'localhost';"
+
+# Create user with access from the local server
+Q6="GRANT USAGE ON *.* TO '\$USER'@'\$HOST' IDENTIFIED BY '\$PASS';"
+Q7="GRANT ALL PRIVILEGES ON \$DBNAME.* TO '\$USER'@'\$HOST';"
+
+Q8="FLUSH PRIVILEGES;"
+
+SQL="\${Q1}\${Q2}\${Q3}\${Q4}\${Q5}\${Q6}\${Q7}\${Q8}"
+  
+echo "Running \"\$SQL\""
+$MYSQLD_MYSQL -h 127.0.0.1 -P $MYSQL_PORT -u root -e "\$SQL"
+echo "Done"
+
+EOF
+
+chmod +x $MYSQL_HOME/bin/dbcreate
+
+#
+# Generate dbdrop
+#
+echo "Generating $MYSQL_HOME/bin/dbdrop..."
+
+cat <<EOF > $MYSQL_HOME/bin/dbdrop
+#!/bin/bash
+
+DBNAME=$DBNAME
+USER=$USER
+PASS=$PASS
+
+# Create database
+SQL="DROP DATABASE \$DBNAME;"
+  
+echo "Running \"\$SQL\""
+$MYSQLD_MYSQL -h 127.0.0.1 -P $MYSQL_PORT -u "\$USER" -p"\$PASS" -e "\$SQL"
+echo "Done"
+
+EOF
+
+chmod +x $MYSQL_HOME/bin/dbdrop
+
+echo Done!
+

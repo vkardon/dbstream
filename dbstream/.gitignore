@@ -1,0 +1,6 @@
+*.DS_Store
+libmysqlstream.so
+reader
+writer
+testapp
+
