@@ -394,7 +394,7 @@ bool MySqlStream::Write(const StreamHeader* hdr, std::istream& data_stream)
 
         char sql[256] = {0};
         sprintf(sql, "INSERT INTO " STREAM_TABLE " (descr, type, timestamp) VALUES ('%s', %hhu, %llu)",
-                hdr->descr, hdr->type, hdr->timestamp);
+                hdr->descr, hdr->type, (long long unsigned int)hdr->timestamp);
         tran_stmt->execute(sql);
 
         // Get the id of the just inserted stream record
@@ -430,7 +430,8 @@ bool MySqlStream::Write(const StreamHeader* hdr, std::istream& data_stream)
         }
 
         // Update master stream record with actual data size
-        sprintf(sql, "UPDATE " STREAM_TABLE " SET size=%llu WHERE id=%llu", size_total, master_id);
+        sprintf(sql, "UPDATE " STREAM_TABLE " SET size=%llu WHERE id=%llu", 
+            (long long unsigned int)size_total, (long long unsigned int)master_id);
         tran_stmt->execute(sql);
 
         mCon->commit();
@@ -477,17 +478,17 @@ bool MySqlStream::Read(const char* column,
             if(first > 0 && last > 0)
             {
                 sprintf(sql, "SELECT * FROM %s WHERE %s %s %llu AND %s %s %llu", 
-                     STREAM_TABLE, column, more, first, column, less, last);
+                     STREAM_TABLE, column, more, (long long unsigned int)first, column, less, (long long unsigned int)last);
             }
             else if(first > 0)
             {
                 sprintf(sql, "SELECT * FROM %s WHERE %s %s %llu", 
-                     STREAM_TABLE, column, more, first);
+                     STREAM_TABLE, column, more, (long long unsigned int)first);
             }
             else if(last > 0)
             {
                 sprintf(sql, "SELECT * FROM %s WHERE %s %s %llu", 
-                     STREAM_TABLE, column, less, last);
+                     STREAM_TABLE, column, less, (long long unsigned int)last);
             }
             else
             {
@@ -606,15 +607,18 @@ bool MySqlStream::Delete(const char* column,
 
         if(first > 0 && last > 0)
         {
-            sprintf(sql, "DELETE FROM %s WHERE %s %s %llu AND id %s %llu", STREAM_TABLE, column, more, first, less, last);
+            sprintf(sql, "DELETE FROM %s WHERE %s %s %llu AND id %s %llu", 
+                STREAM_TABLE, column, more, (long long unsigned int)first, less, (long long unsigned int)last);
         }
         else if(first > 0)
         {
-            sprintf(sql, "DELETE FROM %s WHERE %s %s %llu", STREAM_TABLE, column, more, first);
+            sprintf(sql, "DELETE FROM %s WHERE %s %s %llu", 
+                STREAM_TABLE, column, more, (long long unsigned int)first);
         }
         else if(last > 0)
         {
-            sprintf(sql, "DELETE FROM %s WHERE %s %s %llu", STREAM_TABLE, column, less, last);
+            sprintf(sql, "DELETE FROM %s WHERE %s %s %llu", 
+                STREAM_TABLE, column, less, (long long unsigned int)last);
         }
         else
         {
@@ -739,7 +743,8 @@ bool MySqlStream::Lookup(const char* column, uint64_t val, bool* found)
         // Use SELECT 1 to to prevent the checking of unnecessary fields
         // Use LIMIT 1 to prevent the checking of unnecessary rows
         char sql[256] = {0};
-        sprintf(sql, "SELECT 1 FROM %s WHERE %s = %llu LIMIT 1", STREAM_TABLE, column, val);
+        sprintf(sql, "SELECT 1 FROM %s WHERE %s = %llu LIMIT 1", 
+            STREAM_TABLE, column, (long long unsigned int)val);
 
         // Acquire READ lock to block the deletion while reading is in progress
         std::unique_ptr<sql::Statement> stmt(mCon->createStatement());
@@ -767,7 +772,8 @@ bool MySqlStream::ReadData(const StreamHeader& hdr, bool* stopped)
 
         // Get all data records for the given master id
         uint64_t masterid = hdr.id;
-        sprintf(sql, "SELECT id FROM " STREAMDATA_TABLE " WHERE masterid = %llu order by id", masterid);
+        sprintf(sql, "SELECT id FROM " STREAMDATA_TABLE " WHERE masterid = %llu order by id", 
+            (long long unsigned int)masterid);
         std::unique_ptr<sql::ResultSet> res(stmt->executeQuery(sql));
 
         bool keepReading = mReader->OnRead(&hdr, mBuf, 0, DB_STREAM_READ_BEGIN);
@@ -776,7 +782,7 @@ bool MySqlStream::ReadData(const StreamHeader& hdr, bool* stopped)
         {
             // Get the data itself
             uint64_t id = res->getUInt64("id");
-            sprintf(sql, "SELECT data FROM " STREAMDATA_TABLE " WHERE id=%llu", id);
+            sprintf(sql, "SELECT data FROM " STREAMDATA_TABLE " WHERE id=%llu", (unsigned long long int)id);
             std::unique_ptr<sql::ResultSet> data_res(stmt->executeQuery(sql));
 
             //if(data_res->rowsCount() == 0)

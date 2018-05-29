@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <iostream>     // std::cout
 #include <fstream>      // std::ifstream
+#include <algorithm>    // std::replace
 #include <dirent.h>
 #include <sys/stat.h>   // stat
 #include <sys/time.h>   // gettimeofday
