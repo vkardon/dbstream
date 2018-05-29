@@ -11,10 +11,10 @@ echo "Where is MySQL installed? Press Enter to use MySQL on your path:"
 read answer
 
 if [ -z $answer ]; then
-   MYSQLD_INSTALL_SCRIPT=mysql_install_db
-   MYSQLD_RUN_BIN=mysqld_safe
-   MYSQLD_ADMIN=mysqladmin
-   MYSQLD_MYSQL=mysql
+   MYSQLD_INSTALL_SCRIPT=`which mysql_install_db`
+   MYSQLD_RUN_BIN=`which mysqld_safe`
+   MYSQLD_ADMIN=`which mysqladmin`
+   MYSQLD_MYSQL=`which mysql`
 else
    MYSQLD_HOME=$answer
    MYSQLD_INSTALL_SCRIPT=$MYSQLD_HOME/scripts/mysql_install_db
